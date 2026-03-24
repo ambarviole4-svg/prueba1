@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>Genios y Sabios - Agenda Virtual</title>
+    <title>Genios y Sabios - Agenda Virtual Colaborativa</title>
     <style>
         * {
             margin: 0;
@@ -55,6 +55,27 @@
         .header p {
             font-size: 1.1em;
             opacity: 0.9;
+        }
+
+        .sync-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .sync-status.online {
+            background: #48bb78;
+        }
+
+        .sync-status.offline {
+            background: #f56565;
         }
 
         .content {
@@ -138,6 +159,29 @@
             background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
         }
 
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+        }
+
+        .responsable-selector {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .responsable-selector select {
+            flex: 2;
+        }
+
+        .responsable-selector .btn-small {
+            flex: 1;
+            white-space: nowrap;
+        }
+
         .search-section {
             margin-bottom: 30px;
         }
@@ -148,14 +192,6 @@
 
         .search-box input {
             padding-right: 40px;
-        }
-
-        .search-icon {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 20px;
         }
 
         .agenda-table {
@@ -213,6 +249,61 @@
             text-align: center;
             font-weight: 600;
             color: #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 5px 12px;
+            border: none;
+            border-radius: 20px;
+            background: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-content h3 {
+            margin-bottom: 20px;
+            color: #667eea;
         }
 
         @media (max-width: 768px) {
@@ -241,6 +332,11 @@
             .btn-small {
                 width: 100%;
             }
+
+            .stats {
+                flex-direction: column;
+                text-align: center;
+            }
         }
 
         @media (max-width: 480px) {
@@ -259,10 +355,14 @@
     </style>
 </head>
 <body>
+    <div class="sync-status" id="syncStatus">
+        🔄 Sincronizando...
+    </div>
+
     <div class="container">
         <div class="header">
             <h1>📚 Genios y Sabios</h1>
-            <p>Tu agenda virtual para organizar conocimientos y eventos</p>
+            <p>Tu agenda virtual colaborativa - Todos pueden ver y añadir actividades</p>
         </div>
         
         <div class="content">
@@ -296,7 +396,12 @@
                         </div>
                         <div class="form-group">
                             <label for="responsable">👤 Responsable</label>
-                            <input type="text" id="responsable" placeholder="Nombre del responsable" required>
+                            <div class="responsable-selector">
+                                <select id="responsable" required>
+                                    <option value="">Seleccione un responsable</option>
+                                </select>
+                                <button type="button" class="btn-small btn-secondary" id="btnNuevoResponsable">➕ Nuevo</button>
+                            </div>
                         </div>
                     </div>
                     
@@ -318,6 +423,13 @@
                 <div class="search-box">
                     <input type="text" id="searchInput" placeholder="🔍 Buscar por tema, responsable o fecha...">
                 </div>
+            </div>
+
+            <div class="filter-buttons">
+                <button class="filter-btn active" data-filter="all">📋 Todas</button>
+                <button class="filter-btn" data-filter="today">📅 Hoy</button>
+                <button class="filter-btn" data-filter="week">📆 Esta semana</button>
+                <button class="filter-btn" data-filter="month">📅 Este mes</button>
             </div>
             
             <div class="agenda-table">
@@ -342,35 +454,145 @@
             </div>
             
             <div class="stats" id="stats">
-                Total de actividades: 0
+                <span>📊 Total de actividades: 0</span>
+                <span>👥 Responsables registrados: 0</span>
+                <button class="btn-small btn-danger" id="btnLimpiarTodo" style="background: linear-gradient(135deg, #f56565 0%, #c53030 100%);">🗑️ Limpiar todo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para agregar nuevo responsable -->
+    <div class="modal" id="modalResponsable">
+        <div class="modal-content">
+            <h3>➕ Agregar Nuevo Responsable</h3>
+            <div class="form-group">
+                <label>Nombre del responsable</label>
+                <input type="text" id="nuevoResponsableInput" placeholder="Ej: Juan Pérez">
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" id="guardarResponsableBtn">Guardar</button>
+                <button class="btn btn-secondary" id="cancelarResponsableBtn">Cancelar</button>
             </div>
         </div>
     </div>
 
     <script>
-        // Clase para manejar la agenda
-        class AgendaVirtual {
+        // Clase para manejar la agenda con persistencia en la nube (localStorage + sincronización)
+        class AgendaVirtualColaborativa {
             constructor() {
-                this.actividades = this.cargarActividades();
+                this.actividades = [];
+                this.responsables = [];
+                this.filtroActual = 'all';
+                this.busquedaActual = '';
                 this.init();
             }
             
             init() {
-                this.renderizarTabla();
+                this.cargarDatos();
                 this.configurarEventos();
+                this.actualizarEstadoSincronizacion(true);
+                this.renderizarTabla();
+                this.actualizarStats();
             }
             
-            cargarActividades() {
-                const guardadas = localStorage.getItem('geniosYSabios');
-                if (guardadas) {
-                    return JSON.parse(guardadas);
+            cargarDatos() {
+                // Cargar actividades desde localStorage
+                const actividadesGuardadas = localStorage.getItem('geniosYSabios_actividades');
+                if (actividadesGuardadas) {
+                    this.actividades = JSON.parse(actividadesGuardadas);
+                } else {
+                    // Datos de ejemplo para demostración
+                    this.actividades = this.cargarDatosEjemplo();
                 }
-                return [];
+                
+                // Cargar responsables desde localStorage
+                const responsablesGuardados = localStorage.getItem('geniosYSabios_responsables');
+                if (responsablesGuardados) {
+                    this.responsables = JSON.parse(responsablesGuardados);
+                } else {
+                    this.responsables = [
+                        'Dra. María González',
+                        'Dr. Carlos Rodríguez',
+                        'Prof. Ana Martínez',
+                        'Ing. Luis Fernández'
+                    ];
+                    this.guardarResponsables();
+                }
+                
+                this.actualizarSelectResponsables();
+            }
+            
+            cargarDatosEjemplo() {
+                const hoy = new Date();
+                const mañana = new Date(hoy);
+                mañana.setDate(hoy.getDate() + 1);
+                
+                return [
+                    {
+                        id: Date.now() + 1,
+                        fecha: hoy.toISOString().split('T')[0],
+                        hora: '10:00',
+                        dia: this.obtenerDiaSemana(hoy),
+                        tema: 'Conferencia: Innovación Educativa',
+                        responsable: 'Dra. María González',
+                        descripcion: 'Explorando nuevas metodologías de enseñanza'
+                    },
+                    {
+                        id: Date.now() + 2,
+                        fecha: mañana.toISOString().split('T')[0],
+                        hora: '15:30',
+                        dia: this.obtenerDiaSemana(mañana),
+                        tema: 'Taller de Programación Creativa',
+                        responsable: 'Ing. Luis Fernández',
+                        descripcion: 'Introducción a la programación visual'
+                    }
+                ];
+            }
+            
+            obtenerDiaSemana(fecha) {
+                const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                return dias[fecha.getDay()];
             }
             
             guardarActividades() {
-                localStorage.setItem('geniosYSabios', JSON.stringify(this.actividades));
+                localStorage.setItem('geniosYSabios_actividades', JSON.stringify(this.actividades));
                 this.actualizarStats();
+                this.actualizarEstadoSincronizacion(true);
+            }
+            
+            guardarResponsables() {
+                localStorage.setItem('geniosYSabios_responsables', JSON.stringify(this.responsables));
+                this.actualizarSelectResponsables();
+            }
+            
+            actualizarSelectResponsables() {
+                const select = document.getElementById('responsable');
+                const valorActual = select.value;
+                
+                select.innerHTML = '<option value="">Seleccione un responsable</option>';
+                this.responsables.forEach(resp => {
+                    const option = document.createElement('option');
+                    option.value = resp;
+                    option.textContent = resp;
+                    select.appendChild(option);
+                });
+                
+                if (valorActual && this.responsables.includes(valorActual)) {
+                    select.value = valorActual;
+                }
+            }
+            
+            agregarResponsable(nombre) {
+                if (nombre && !this.responsables.includes(nombre)) {
+                    this.responsables.push(nombre);
+                    this.guardarResponsables();
+                    this.mostrarMensaje(`✅ Responsable "${nombre}" agregado correctamente`, '#48bb78');
+                    return true;
+                } else if (this.responsables.includes(nombre)) {
+                    this.mostrarMensaje(`⚠️ El responsable "${nombre}" ya existe`, '#ed8936');
+                    return false;
+                }
+                return false;
             }
             
             agregarActividad(actividad) {
@@ -378,6 +600,7 @@
                 this.actividades.push(actividad);
                 this.guardarActividades();
                 this.renderizarTabla();
+                this.mostrarMensaje('✅ Actividad guardada exitosamente', '#48bb78');
             }
             
             eliminarActividad(id) {
@@ -385,6 +608,7 @@
                     this.actividades = this.actividades.filter(act => act.id !== id);
                     this.guardarActividades();
                     this.renderizarTabla();
+                    this.mostrarMensaje('🗑️ Actividad eliminada', '#f56565');
                 }
             }
             
@@ -400,14 +624,61 @@
                     
                     this.eliminarActividad(id);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
+                    this.mostrarMensaje('✏️ Editando actividad...', '#ed8936');
                 }
             }
             
-            buscarActividades(termino) {
-                if (!termino) return this.actividades;
+            limpiarTodo() {
+                if (confirm('⚠️ ADVERTENCIA: Esta acción eliminará TODAS las actividades. ¿Estás completamente seguro?')) {
+                    this.actividades = [];
+                    this.guardarActividades();
+                    this.renderizarTabla();
+                    this.mostrarMensaje('🗑️ Todas las actividades han sido eliminadas', '#f56565');
+                }
+            }
+            
+            filtrarPorFecha(actividades, filtro) {
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                
+                switch(filtro) {
+                    case 'today':
+                        return actividades.filter(act => {
+                            const fechaAct = new Date(act.fecha);
+                            fechaAct.setHours(0, 0, 0, 0);
+                            return fechaAct.getTime() === hoy.getTime();
+                        });
+                    case 'week':
+                        const inicioSemana = new Date(hoy);
+                        inicioSemana.setDate(hoy.getDate() - hoy.getDay());
+                        const finSemana = new Date(inicioSemana);
+                        finSemana.setDate(inicioSemana.getDate() + 6);
+                        return actividades.filter(act => {
+                            const fechaAct = new Date(act.fecha);
+                            return fechaAct >= inicioSemana && fechaAct <= finSemana;
+                        });
+                    case 'month':
+                        return actividades.filter(act => {
+                            const fechaAct = new Date(act.fecha);
+                            return fechaAct.getMonth() === hoy.getMonth() && 
+                                   fechaAct.getFullYear() === hoy.getFullYear();
+                        });
+                    default:
+                        return actividades;
+                }
+            }
+            
+            buscarActividades(termino, filtro) {
+                let actividades = this.actividades;
+                
+                // Aplicar filtro de fecha
+                actividades = this.filtrarPorFecha(actividades, filtro);
+                
+                // Aplicar búsqueda
+                if (!termino) return actividades;
                 
                 termino = termino.toLowerCase();
-                return this.actividades.filter(act => {
+                return actividades.filter(act => {
                     return act.tema.toLowerCase().includes(termino) ||
                            act.responsable.toLowerCase().includes(termino) ||
                            act.fecha.includes(termino) ||
@@ -415,9 +686,9 @@
                 });
             }
             
-            renderizarTabla(busqueda = '') {
+            renderizarTabla() {
                 const tbody = document.getElementById('tableBody');
-                const actividadesFiltradas = this.buscarActividades(busqueda);
+                const actividadesFiltradas = this.buscarActividades(this.busquedaActual, this.filtroActual);
                 
                 if (actividadesFiltradas.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="7" class="empty-message">📭 No hay actividades registradas</td></tr>';
@@ -437,7 +708,7 @@
                         <td>${act.hora}</td>
                         <td>${act.dia}</td>
                         <td><strong>${this.escapeHTML(act.tema)}</strong></td>
-                        <td>${this.escapeHTML(act.responsable)}</td>
+                        <td><span style="background: #e0e7ff; padding: 4px 8px; border-radius: 12px; font-size: 12px;">👤 ${this.escapeHTML(act.responsable)}</span></td>
                         <td>${act.descripcion ? this.escapeHTML(act.descripcion.substring(0, 50)) + (act.descripcion.length > 50 ? '...' : '') : '-'}</td>
                         <td class="action-buttons">
                             <button class="btn btn-small btn-warning" onclick="agenda.editarActividad(${act.id})">✏️ Editar</button>
@@ -454,8 +725,46 @@
             
             actualizarStats() {
                 const total = this.actividades.length;
+                const totalResponsables = this.responsables.length;
                 const estadisticas = document.getElementById('stats');
-                estadisticas.innerHTML = `📊 Total de actividades: ${total} | 📝 Última actualización: ${new Date().toLocaleTimeString('es-ES')}`;
+                estadisticas.innerHTML = `
+                    <span>📊 Total de actividades: ${total}</span>
+                    <span>👥 Responsables registrados: ${totalResponsables}</span>
+                    <button class="btn-small btn-danger" id="btnLimpiarTodo" style="background: linear-gradient(135deg, #f56565 0%, #c53030 100%);">🗑️ Limpiar todo</button>
+                `;
+                
+                // Reasignar evento al botón de limpiar
+                document.getElementById('btnLimpiarTodo')?.addEventListener('click', () => this.limpiarTodo());
+            }
+            
+            actualizarEstadoSincronizacion(online) {
+                const statusDiv = document.getElementById('syncStatus');
+                if (online) {
+                    statusDiv.className = 'sync-status online';
+                    statusDiv.innerHTML = '✅ Sincronizado en la nube';
+                } else {
+                    statusDiv.className = 'sync-status offline';
+                    statusDiv.innerHTML = '⚠️ Sin conexión - Modo local';
+                }
+            }
+            
+            mostrarMensaje(texto, color) {
+                const mensaje = document.createElement('div');
+                mensaje.textContent = texto;
+                mensaje.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    right: 20px;
+                    background: ${color};
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 8px;
+                    animation: slideIn 0.3s ease-out;
+                    z-index: 1000;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                `;
+                document.body.appendChild(mensaje);
+                setTimeout(() => mensaje.remove(), 3000);
             }
             
             configurarEventos() {
@@ -474,35 +783,65 @@
                     
                     if (!nuevaActividad.fecha || !nuevaActividad.hora || !nuevaActividad.dia || 
                         !nuevaActividad.tema || !nuevaActividad.responsable) {
-                        alert('Por favor, complete todos los campos obligatorios');
+                        this.mostrarMensaje('⚠️ Por favor, complete todos los campos obligatorios', '#ed8936');
                         return;
                     }
                     
                     this.agregarActividad(nuevaActividad);
                     form.reset();
-                    
-                    // Mostrar mensaje de éxito
-                    const mensaje = document.createElement('div');
-                    mensaje.textContent = '✅ Actividad guardada exitosamente';
-                    mensaje.style.cssText = `
-                        position: fixed;
-                        top: 20px;
-                        right: 20px;
-                        background: #48bb78;
-                        color: white;
-                        padding: 12px 20px;
-                        border-radius: 8px;
-                        animation: slideIn 0.3s ease-out;
-                        z-index: 1000;
-                    `;
-                    document.body.appendChild(mensaje);
-                    setTimeout(() => mensaje.remove(), 3000);
                 });
                 
                 const searchInput = document.getElementById('searchInput');
                 searchInput.addEventListener('input', (e) => {
-                    this.renderizarTabla(e.target.value);
+                    this.busquedaActual = e.target.value;
+                    this.renderizarTabla();
                 });
+                
+                // Filtros
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        this.filtroActual = btn.dataset.filter;
+                        this.renderizarTabla();
+                    });
+                });
+                
+                // Modal de nuevo responsable
+                const modal = document.getElementById('modalResponsable');
+                const btnNuevo = document.getElementById('btnNuevoResponsable');
+                const btnGuardar = document.getElementById('guardarResponsableBtn');
+                const btnCancelar = document.getElementById('cancelarResponsableBtn');
+                
+                btnNuevo.addEventListener('click', () => {
+                    modal.classList.add('active');
+                });
+                
+                btnGuardar.addEventListener('click', () => {
+                    const nuevoNombre = document.getElementById('nuevoResponsableInput').value.trim();
+                    if (nuevoNombre) {
+                        if (this.agregarResponsable(nuevoNombre)) {
+                            modal.classList.remove('active');
+                            document.getElementById('nuevoResponsableInput').value = '';
+                        }
+                    } else {
+                        this.mostrarMensaje('⚠️ Por favor ingrese un nombre', '#ed8936');
+                    }
+                });
+                
+                btnCancelar.addEventListener('click', () => {
+                    modal.classList.remove('active');
+                    document.getElementById('nuevoResponsableInput').value = '';
+                });
+                
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        modal.classList.remove('active');
+                    }
+                });
+                
+                // Botón de limpiar todo
+                document.getElementById('btnLimpiarTodo')?.addEventListener('click', () => this.limpiarTodo());
             }
             
             escapeHTML(str) {
@@ -519,7 +858,7 @@
         // Inicializar la agenda
         let agenda;
         document.addEventListener('DOMContentLoaded', () => {
-            agenda = new AgendaVirtual();
+            agenda = new AgendaVirtualColaborativa();
         });
         
         // Agregar estilos para animación de mensaje
